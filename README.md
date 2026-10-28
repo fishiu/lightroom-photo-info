@@ -130,3 +130,5 @@ ARCH=arm64 ./scripts/package-release.sh
 Copyright © 2026 fishiu。项目采用 **[GNU GPL v3.0 only](LICENSE)**（`GPL-3.0-only`）。
 
 Lightroom 是 Adobe 的商标。本项目由社区独立开发，与 Adobe 无隶属关系。
+
+第三方标识的归属与使用说明见[素材声明](docs/images/ATTRIBUTION.md)。

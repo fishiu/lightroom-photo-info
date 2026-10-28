@@ -94,3 +94,5 @@ Diagnostics can include filenames, album names, paths, capture timestamps and in
 Copyright © 2026 fishiu. Licensed under **[GNU GPL v3.0 only](LICENSE)** (`GPL-3.0-only`).
 
 Lightroom is a trademark of Adobe. This project is independent and is not affiliated with Adobe.
+
+Third-party marks are documented in [image attribution](docs/images/ATTRIBUTION.md).

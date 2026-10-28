@@ -5,6 +5,7 @@ let destination = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: tr
 try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
 let icon = NSImage(contentsOf: destination.appendingPathComponent("icon.png"))!
 let panel = NSImage(contentsOf: destination.appendingPathComponent("expanded.png"))!
+let githubMark = NSImage(contentsOf: destination.appendingPathComponent("github-mark-white.png"))!
 let mint = NSColor(srgbRed: 0.57, green: 0.89, blue: 0.81, alpha: 1)
 let white = NSColor(srgbRed: 0.94, green: 0.96, blue: 0.97, alpha: 1)
 let secondary = NSColor(srgbRed: 0.62, green: 0.70, blue: 0.74, alpha: 1)
@@ -48,7 +49,10 @@ func render(_ name: String, width: Int, height: Int, portrait: Bool) throws {
         panel.draw(in: panelRect)
         text("自动跟随照片   /   背景透明度可调", x: 88, top: 1120, size: 29, color: mint, weight: .medium)
         text("macOS · Apple Silicon · GPL-3.0 开源", x: 88, top: 1180, size: 25, color: secondary)
-        text("github.com/fishiu/lightroom-photo-info", x: 88, top: 1310, size: 24, color: secondary)
+        let markHeight: CGFloat = 32
+        let markWidth = markHeight * githubMark.size.width / githubMark.size.height
+        githubMark.draw(in: rect(88, 1308, markWidth, markHeight))
+        text("fishiu/lightroom-photo-info", x: 88 + markWidth + 16, top: 1310, size: 24, color: secondary)
     } else {
         icon.draw(in: rect(76, 80, 94, 94))
         text("Lightroom Photo Info", x: 188, top: 108, size: 30, weight: .medium)
@@ -64,6 +68,8 @@ func render(_ name: String, width: Int, height: Int, portrait: Bool) throws {
     try bitmap.representation(using: .png, properties: [:])!.write(to: destination.appendingPathComponent(name))
 }
 
-try render("hero.png", width: 1600, height: 900, portrait: false)
-try render("social-preview.png", width: 1200, height: 675, portrait: false)
+if !CommandLine.arguments.contains("--share-only") {
+    try render("hero.png", width: 1600, height: 900, portrait: false)
+    try render("social-preview.png", width: 1200, height: 675, portrait: false)
+}
 try render("share-cover.png", width: 1080, height: 1440, portrait: true)
