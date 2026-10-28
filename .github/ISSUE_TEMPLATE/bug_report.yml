@@ -1,0 +1,55 @@
+name: 问题反馈
+description: 报告无法显示、参数错误、闪动或其他异常
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查看 README 的兼容范围和常见问题。无需上传原片或图库；日志与截图请先移除个人信息。
+  - type: textarea
+    id: versions
+    attributes:
+      label: 运行环境
+      description: 工具版本、macOS 版本、Lightroom 版本、芯片架构，以及 Lightroom 界面语言。
+      placeholder: |
+        Lightroom Photo Info：
+        macOS：
+        Lightroom 云端版：
+        芯片：Apple Silicon / Intel
+        Lightroom 界面语言：
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重现步骤
+      description: 说明所在视图、Cloud / Local 来源，以及触发问题的操作。
+      placeholder: |
+        1. 打开云端相册中的单张照片
+        2. 打开编辑面板
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+      placeholder: 希望看到什么？
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 写出提示文字、发生频率；如附截图，请裁剪并遮挡私人内容。
+    validations:
+      required: true
+  - type: textarea
+    id: sanitized_logs
+    attributes:
+      label: 可选：脱敏后的诊断片段
+      description: 不要粘贴原始诊断 JSON、账号目录、原片或图库。删除或替换文件名、相册、路径、拍摄时间和 assetID，仅保留与问题有关的状态或错误。
+      render: text
+    validations:
+      required: false
