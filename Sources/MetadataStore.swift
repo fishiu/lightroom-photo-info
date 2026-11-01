@@ -80,7 +80,8 @@ final class MetadataStore {
             cachedMetadataCount: metadataCache.count, cachedMetadataBytes: metadataBytes)
     }
 
-    func lookup(filename: String, albumName: String? = nil) -> MetadataLookup {
+    func lookup(filename: String, albumName: String? = nil, albumTokenTexts: [String]? = nil,
+                albumCapturePermissionNeeded: Bool = false) -> MetadataLookup {
         lock.lock()
         defer { lock.unlock() }
         do {
@@ -92,7 +93,31 @@ final class MetadataStore {
                 resolutionCache.removeAll(keepingCapacity: true)
                 indexVersions = currentIndexVersions
             }
-            let matches = try resolve(filename: filename, albumName: albumName)
+            var scope = albumName
+            if scope == nil, albumCapturePermissionNeeded {
+                return .unavailable("请在菜单栏开启相册识别权限，以确认当前相册")
+            }
+            if scope == nil, let texts = albumTokenTexts {
+                // Only complete labels, never substring/fuzzy matches or a remembered album.
+                var matching = Set<String>()
+                for (index, text) in texts.enumerated() {
+                    let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let normalized = Self.albumTokenName(raw) else {
+                        if index == 0 { return .unavailable("无法读清当前相册标签，请显示完整相册名称") }
+                        continue
+                    }
+                    if try catalogs.contains(where: { try !$0.albumIDs(named: raw).isEmpty }) {
+                        matching.insert(raw)
+                    } else if try catalogs.contains(where: { try !$0.albumIDs(named: normalized).isEmpty }) {
+                        matching.insert(normalized)
+                    }
+                    if index == 0, matching.isEmpty { return .unavailable("无法读清当前相册标签，请显示完整相册名称") }
+                }
+                guard matching.count <= 1 else { throw CatalogError.ambiguousAlbum }
+                guard !matching.isEmpty else { return .unavailable("无法读清当前相册标签，请显示完整相册名称") }
+                scope = matching.first
+            }
+            let matches = try resolve(filename: filename, albumName: scope)
             guard !matches.isEmpty else { return .unavailable("无法确认当前照片的图库记录") }
             let results = try matches.map { try metadata(catalog: $0.0, candidate: $0.1) }
             // Either database may change during the lookup. Never publish a mixed-generation result.
@@ -103,7 +128,9 @@ final class MetadataStore {
             guard let first = results.first else { return .unavailable("无法确认当前照片的图库记录") }
             if results.count > 1 {
                 guard results.allSatisfy({ $0.displayedValues == first.displayedValues }) else {
-                    return .unavailable("同名照片 \(matches.count) 张且参数不同，无法唯一匹配")
+                    return .unavailable(albumCapturePermissionNeeded
+                        ? "同名照片无法区分，请在菜单栏开启相册识别权限"
+                        : "图库中有 \(matches.count) 张同名照片，当前相册范围无法区分")
                 }
                 // Identity remains ambiguous, but every displayed value is common to all candidates.
                 // Never assign one candidate's assetID to this aggregate result.
@@ -126,6 +153,16 @@ final class MetadataStore {
             // Do not leak database paths, account identifiers, or raw metadata into user-facing errors.
             return .unavailable("图库暂时无法读取，稍后自动重试")
         }
+    }
+
+    static func albumTokenName(_ text: String) -> String? {
+        var name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The close glyph is sometimes included in Vision's text observation.
+        for suffix in [" ×", " ✕"] where name.hasSuffix(suffix) {
+            name = String(name.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        guard !name.isEmpty, !["已选取", "已拒绝", "未标记", "Picked", "Rejected", "Unflagged"].contains(name) else { return nil }
+        return name
     }
 
     private func resolve(filename: String, albumName: String?) throws -> [(Catalog, Candidate)] {

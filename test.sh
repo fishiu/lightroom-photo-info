@@ -32,12 +32,12 @@ xcrun swiftc "${app_sources[@]}" "$project_dir/Tests/DisplayTransitionTests.swif
   -lsqlite3 -o "$test_dir/display-tests"
 "$test_dir/display-tests"
 
-xcrun swiftc "$project_dir/Sources/LightroomSelection.swift" \
+xcrun swiftc -target "$(uname -m)-apple-macosx13.0" "$project_dir/Sources/LightroomSelection.swift" "$project_dir/Sources/AlbumTokenReader.swift" \
   "$project_dir/Sources/MetadataRefreshSchedule.swift" "$project_dir/Tests/MetadataRefreshTests.swift" \
   -o "$test_dir/refresh-tests"
 "$test_dir/refresh-tests"
 
-xcrun swiftc "$project_dir/Sources/LightroomSelection.swift" "$project_dir/Tests/SelectionClassificationTests.swift" \
+xcrun swiftc -target "$(uname -m)-apple-macosx13.0" "$project_dir/Sources/LightroomSelection.swift" "$project_dir/Sources/AlbumTokenReader.swift" "$project_dir/Tests/SelectionClassificationTests.swift" \
   -o "$test_dir/selection-tests"
 "$test_dir/selection-tests"
 xcrun swiftc "$project_dir/Sources/AppearanceSettings.swift" "$project_dir/Tests/AppearanceSettingsTests.swift" \

@@ -57,9 +57,9 @@ private func createFixtures(at library: URL) throws {
         CREATE TABLE albums(albumId,name,hidden);
         CREATE TABLE album_asset_v2(assetId,albumId);
         INSERT INTO albums VALUES('album-a','Album A',0),('album-b','Album B',0),
-                                 ('duplicate-a','Same Name',0),('duplicate-b','Same Name',0);
+                                 ('duplicate-a','Same Name',0),('duplicate-b','Same Name',0),('literal-close','Album B ×',0);
         INSERT INTO album_asset_v2 VALUES('test-1','album-a'),('test-2','album-a'),
-                                        ('test-3','album-a'),('test-4','album-a'),('test-5','album-b');
+                                        ('test-3','album-a'),('test-4','album-a'),('test-5','album-b'),('test-4','literal-close');
         """)
     try execute(documents, """
         CREATE TABLE schemaVersion(currentVersion);
@@ -196,6 +196,29 @@ struct MetadataStoreTests {
             throw TestFailure(description: "Unique album should resolve global filename conflict")
         }
         try expect(scoped.iso == "200" && scoped.assetID == "test-5", "Album resolution selected the wrong asset")
+        // Search pills omit album labels from AX, regardless of which filter activated them.
+        for tokens in [["Album B"], ["Album B ✕", "已选取"], ["Album B", "相机: X100VI"]] {
+            guard case let .found(photo) = store.lookup(filename: "conflict.RAF", albumTokenTexts: tokens) else {
+                throw TestFailure(description: "Search-token album was not resolved")
+            }
+            try expect(photo.assetID == "test-5", "Token scope selected another album's photo")
+        }
+        guard case let .found(other) = store.lookup(filename: "conflict.RAF", albumTokenTexts: ["Album A"]) else {
+            throw TestFailure(description: "Switching album tokens reused an old resolution")
+        }
+        try expect(other.assetID == "test-4", "Previous album result leaked across a same-name photo switch")
+        guard case let .found(literal) = store.lookup(filename: "conflict.RAF", albumTokenTexts: ["Album B ×"]) else {
+            throw TestFailure(description: "Literal album suffix must be matched first")
+        }
+        try expect(literal.assetID == "test-4", "An album suffix was mistaken for a close glyph")
+        for tokens in [["Album"], ["Album B X"], ["Album B…"], ["", "Album B"], ["已选取", "Album B"], ["Album A", "Album B"], ["Same Name"], ["已选取"], []] {
+            if case .found = store.lookup(filename: "conflict.RAF", albumTokenTexts: tokens) {
+                throw TestFailure(description: "Ambiguous, missing, or partial token scope was guessed")
+            }
+            if case .found = store.lookup(filename: "unique.RAF", albumTokenTexts: tokens) {
+                throw TestFailure(description: "An unknown scope fell back to a unique global candidate")
+            }
+        }
         guard case .found = store.lookup(filename: "same.RAF", albumName: "所有照片") else {
             throw TestFailure(description: "Non-album scope should retain global consensus")
         }

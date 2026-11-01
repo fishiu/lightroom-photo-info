@@ -53,6 +53,8 @@ This is an early release. It depends on Lightroom's private cache format, so Ado
 3. Open it and allow **Accessibility** access in System Settings → Privacy & Security.
 4. Return to Lightroom and open one photo in Detail/Edit view using the Cloud tab.
 
+**Duplicate filenames inside an album:** Lightroom sometimes draws album scope as search pills absent from its accessibility tree. Use the menu-bar action **相册识别权限…** to grant optional Screen Recording access. The utility captures only the small search-token region when the album label is unavailable, recognizes text locally, and never saves or uploads screenshots. Accessible labels remain the preferred path. Unreadable/truncated labels, duplicate album names, and conflicting same-name photos within one album remain unresolved rather than guessed.
+
 **First-launch warning:** releases are ad-hoc signed, without an Apple Developer ID certificate or Apple notarization. After verifying that the download came from this repository, follow [Apple's documented Open Anyway flow](https://support.apple.com/102445) for this app. Disabling Gatekeeper is not required.
 
 If an update still reports missing permission, quit the utility, turn its Accessibility switch off and on, then relaunch it. Lightroom itself does not need a restart.

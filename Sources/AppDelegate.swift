@@ -110,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(withTitle: "隐藏拍摄信息", action: #selector(hidePanel), keyEquivalent: "").target = self
         menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "辅助功能权限…", action: #selector(openAccessibility), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "相册识别权限…", action: #selector(openAlbumPermission), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出拍摄信息", action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
@@ -206,7 +207,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             var result: MetadataLookup?
             if case .selected(let selection) = first.state, first.windowFrame != nil {
                 switch selection.source {
-                case .cloud: result = self.store.lookup(filename: selection.filename, albumName: selection.albumName)
+                case .cloud: result = self.store.lookup(filename: selection.filename, albumName: selection.albumName,
+                    albumTokenTexts: selection.albumTokenTexts, albumCapturePermissionNeeded: selection.albumCapturePermissionNeeded)
                 case .local: result = .unavailable("本地视图暂未支持，请切回云端照片")
                 case .unknown: result = .unavailable("暂时无法确认照片来源")
                 }
@@ -505,6 +507,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         didRequestPermission = false
         requestPermissionOnce()
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func openAlbumPermission() {
+        let alert = NSAlert()
+        alert.messageText = "识别 Lightroom 的相册标签"
+        alert.informativeText = "当 Lightroom 没有提供可读取的相册名称时，工具会在本机识别顶部搜索栏的标签区域。不会保存或上传截图。macOS 需要“屏幕录制”权限；普通相册仍优先使用辅助功能。"
+        alert.addButton(withTitle: "打开权限设置")
+        alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        _ = AlbumScreenCapturePermission.request()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
         }
     }
