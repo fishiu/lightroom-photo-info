@@ -40,6 +40,9 @@ xcrun swiftc -target "$(uname -m)-apple-macosx13.0" "$project_dir/Sources/Lightr
 xcrun swiftc -target "$(uname -m)-apple-macosx13.0" "$project_dir/Sources/LightroomSelection.swift" "$project_dir/Sources/AlbumTokenReader.swift" "$project_dir/Tests/SelectionClassificationTests.swift" \
   -o "$test_dir/selection-tests"
 "$test_dir/selection-tests"
+xcrun swiftc -target "$(uname -m)-apple-macosx13.0" "$project_dir/Sources/AlbumTokenReader.swift" \
+  "$project_dir/Tests/SidebarSelectionTests.swift" -o "$test_dir/sidebar-tests"
+"$test_dir/sidebar-tests"
 xcrun swiftc "$project_dir/Sources/AppearanceSettings.swift" "$project_dir/Tests/AppearanceSettingsTests.swift" \
   -o "$test_dir/appearance-tests"
 "$test_dir/appearance-tests"

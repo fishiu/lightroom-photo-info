@@ -157,6 +157,8 @@ final class LightroomSelectionReader {
             var albumName: String?
             var searchIconFrame: CGRect?
             var searchFieldFrame: CGRect?
+            var albumListFrame: CGRect?
+            var sidebarViewport: CGRect?
             var gridSelected = false
             var compareSelected = false
             var detailSelected: Bool?
@@ -169,6 +171,12 @@ final class LightroomSelectionReader {
                 }
                 if identifier == "organize_search_field", case .visible(let bounds) = windowGeometry(element) {
                     searchFieldFrame = bounds
+                }
+                if identifier == "organize_library_view", case .visible(let bounds) = windowGeometry(element) {
+                    albumListFrame = bounds
+                }
+                if identifier == "left_panel_track_scroll_view", case .visible(let bounds) = windowGeometry(element) {
+                    sidebarViewport = bounds
                 }
                 if identifier == "center_content_view" { hasMainContent = true }
                 if ["OrganizeToolbarFlowButton", "OrganizeToolbarGridButton", "OrganizeToolbarCompareButton", "OrganizeToolbarLoupeButton"].contains(identifier),
@@ -209,9 +217,23 @@ final class LightroomSelectionReader {
                 let document = string(window, kAXDocumentAttribute)
                 let path = document.flatMap { URL(string: $0) }.flatMap { $0.isFileURL ? $0.path : nil }
                 var selection = PhotoSelection(filename: filename, documentPath: path, albumName: albumName, source: source)
+                // Active search pills define scope even if a previous sidebar row stays highlighted.
+                if albumName == nil, searchIconFrame == nil, source == .cloud, let list = albumListFrame, let viewport = sidebarViewport {
+                    // The list is custom-drawn too. Only its highlighted row proves selection;
+                    // capture the text column, excluding album thumbnails and the photo area.
+                    let column = CGRect(x: list.minX + 64, y: list.minY, width: max(0, list.width - 64), height: list.height)
+                    let visible = column.intersection(viewport).intersection(frame)
+                    if !visible.isNull, !visible.isEmpty {
+                        selection.albumCapturePermissionNeeded = !AlbumScreenCapturePermission.isGranted
+                        selection.albumTokenTexts = []
+                        if let name = albumTokenReader.readSelectedAlbum(rect: visible, processID: app.processIdentifier, windowFrame: frame) {
+                            selection.albumTokenTexts = [name]
+                        }
+                    }
+                }
                 // Search pills are drawn by Lightroom and absent from AXChildren. Read only the
                 // space between its search icon and editable text; never the photo or sidebar.
-                if albumName == nil, source == .cloud, let icon = searchIconFrame, let field = searchFieldFrame,
+                if albumName == nil, selection.albumTokenTexts?.isEmpty != false, source == .cloud, let icon = searchIconFrame, let field = searchFieldFrame,
                    abs(icon.midY - field.midY) < 20, field.minX - icon.maxX > 30 {
                     let tokenRect = CGRect(x: icon.maxX, y: field.minY, width: field.minX - icon.maxX, height: field.height)
                     selection.albumCapturePermissionNeeded = !AlbumScreenCapturePermission.isGranted

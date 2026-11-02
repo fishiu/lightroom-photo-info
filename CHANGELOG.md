@@ -3,6 +3,7 @@
 ## 0.4.1 — 2026-11-02
 
 - Resolve album scope when Lightroom renders it as inaccessible search pills, with or without flag filters.
+- Read the highlighted album sidebar row when switching albums leaves the search header blank.
 - Optional, local text recognition restricted to the search-token region; no screenshot files or uploads.
 - Keep exact album matching and reject ambiguous scopes instead of using stale saved selections.
 - Add an album-recognition permission menu and a specific message for unresolved duplicates.

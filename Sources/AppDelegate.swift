@@ -514,7 +514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func openAlbumPermission() {
         let alert = NSAlert()
         alert.messageText = "识别 Lightroom 的相册标签"
-        alert.informativeText = "当 Lightroom 没有提供可读取的相册名称时，工具会在本机识别顶部搜索栏的标签区域。不会保存或上传截图。macOS 需要“屏幕录制”权限；普通相册仍优先使用辅助功能。"
+        alert.informativeText = "当 Lightroom 没有提供可读取的相册名称时，工具会在本机识别相册侧栏的选中行或顶部搜索标签。只读取相册文字区域，不读取中央照片；不会保存或上传截图。macOS 需要“屏幕录制”权限。"
         alert.addButton(withTitle: "打开权限设置")
         alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }

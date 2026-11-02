@@ -18,6 +18,110 @@ enum AlbumScreenCapturePermission {
 final class AlbumTokenReader {
     private let cacheLock = NSLock()
     private var lastRecognition: (key: RecognitionKey, texts: [String])?
+    private var lastSidebarRecognition: (key: RecognitionKey, name: String?)?
+
+    /// The caller supplies only the visible album-list text column, excluding thumbnails.
+    /// A complete, uniquely dark selection band is required; ordinary rows are never read.
+    func readSelectedAlbum(rect: CGRect, processID: pid_t, windowFrame: CGRect) -> String? {
+        guard !Thread.isMainThread, AlbumScreenCapturePermission.isGranted,
+              Self.isValidSidebarRect(rect, in: windowFrame),
+              let windowID = Self.windowID(processID: processID, frame: windowFrame),
+              let image = captureTokens(rect: rect, processID: processID, windowID: windowID, windowFrame: windowFrame),
+              Self.windowID(processID: processID, frame: windowFrame) == windowID else { return nil }
+        let key = recognitionKey(image: image, rect: rect, processID: processID,
+                                 windowID: windowID, windowFrame: windowFrame)
+        if let key {
+            cacheLock.lock()
+            let cached = lastSidebarRecognition
+            cacheLock.unlock()
+            if let cached, cached.key == key { return cached.name }
+        }
+        let name = Self.selectedSidebarRow(in: image, pointHeight: rect.height).flatMap { row -> String? in
+            guard let crop = image.cropping(to: row) else { return nil }
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["zh-Hans", "en-US"]
+            request.usesLanguageCorrection = false
+            do {
+                try VNImageRequestHandler(cgImage: crop, options: [:]).perform([request])
+                // Preserve the first observation even if unreadable. A later count/name
+                // must never replace it. The album title starts at the text column's left.
+                guard let first = request.results?.min(by: { $0.boundingBox.minX < $1.boundingBox.minX }),
+                      first.boundingBox.minX < 0.15,
+                      let candidate = first.topCandidates(1).first, candidate.confidence >= 0.85 else { return nil }
+                var text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Vision may merge the right-aligned photo count with the album title.
+                // Strip it only when its own character box is in that far-right column.
+                if let range = text.range(of: #"\s+\d+[’',]?\d*$"#, options: .regularExpression),
+                   let countBox = try? candidate.boundingBox(for: range), countBox.boundingBox.minX > 0.82 {
+                    text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+                }
+                return text.isEmpty ? nil : text
+            } catch { return nil }
+        }
+        if let key {
+            cacheLock.lock()
+            lastSidebarRecognition = (key, name)
+            cacheLock.unlock()
+        }
+        return name
+    }
+
+    /// Detect the selected-row background, independent of the text it contains. The
+    /// unselected Lightroom sidebar is neutral gray; selection is a darker full band.
+    /// Partial/clipped bands, multiple bands, or unfamiliar themes fail closed.
+    static func selectedSidebarRow(in image: CGImage, pointHeight: CGFloat) -> CGRect? {
+        let width = image.width, height = image.height
+        guard width >= 32, height >= 32, pointHeight > 0 else { return nil }
+        let scale = CGFloat(height) / pointHeight
+        guard scale >= 0.9, scale <= 4 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        // The text column begins with a narrow empty inset. Sampling only that inset
+        // avoids text/count glyphs and never considers a dark thumbnail a selection.
+        let columns = [max(1, Int(scale)), max(2, Int(2 * scale)), max(3, Int(3 * scale))]
+        var shades = [Int](repeating: -1, count: height)
+        var histogram = [Int](repeating: 0, count: 256)
+        for y in 0..<height {
+            var samples: [Int] = []
+            for x in columns where x < width {
+                let i = (y * width + x) * 4
+                let r = Int(pixels[i]), g = Int(pixels[i + 1]), b = Int(pixels[i + 2])
+                if pixels[i + 3] >= 250, max(r, g, b) - min(r, g, b) <= 4 {
+                    samples.append((r + g + b) / 3)
+                }
+            }
+            if samples.count == columns.count, let shade = samples.min(), samples.max()! - shade <= 3 {
+                shades[y] = shade
+                histogram[shade] += 1
+            }
+        }
+        guard let background = (24...100).max(by: { histogram[$0] < histogram[$1] }),
+              histogram[background] > height / 5 else { return nil }
+        var bands: [Range<Int>] = []
+        var start: Int?
+        for y in 0...height {
+            let isDark = y < height && shades[y] >= 12 && shades[y] <= background - 7
+            if isDark && start == nil { start = y }
+            if !isDark, let begin = start { bands.append(begin..<y); start = nil }
+        }
+        let margin = max(2, Int(3 * scale))
+        let rows = bands.filter { band in
+            let points = CGFloat(band.count) / scale
+            return points >= 28 && points <= 62 && band.lowerBound >= margin && band.upperBound + margin < height &&
+                abs(shades[band.lowerBound - margin] - background) <= 3 &&
+                abs(shades[band.upperBound + margin] - background) <= 3
+        }
+        guard rows.count == 1, let row = rows.first else { return nil }
+        return CGRect(x: 0, y: row.lowerBound, width: width, height: row.count)
+    }
 
     /// Coordinates use the accessibility/Quartz screen coordinate system (top-left origin).
     /// Call from the reader queue, never the main thread. Nil means capture/recognition failed;
@@ -92,6 +196,14 @@ final class AlbumTokenReader {
                       frame.minX, frame.minY, frame.width, frame.height]
         return values.allSatisfy(\.isFinite) && !rect.isEmpty && !frame.isEmpty &&
             frame.contains(rect) && rect.height <= 80 && rect.maxY <= frame.minY + 100
+    }
+
+    private static func isValidSidebarRect(_ rect: CGRect, in frame: CGRect) -> Bool {
+        let values = [rect.minX, rect.minY, rect.width, rect.height,
+                      frame.minX, frame.minY, frame.width, frame.height]
+        return values.allSatisfy(\.isFinite) && !rect.isEmpty && !frame.isEmpty &&
+            frame.contains(rect) && rect.width <= 320 && rect.maxX <= frame.minX + 320 &&
+            rect.minY >= frame.minY + 40
     }
 
     private static func sameFrame(_ left: CGRect, _ right: CGRect) -> Bool {
