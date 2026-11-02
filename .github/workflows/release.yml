@@ -46,8 +46,6 @@ jobs:
           - Download the `.zip`, extract it, and move the app to Applications. Apple Silicon only; built with a macOS 13 deployment target.
           - 首次使用需要在系统设置中授予“辅助功能”权限。完整步骤及兼容性说明见项目 README。
           - Accessibility permission is required. See the project README for installation and compatibility details.
-          - 相册范围无法读取时，可通过菜单栏“相册识别权限…”开启屏幕录制权限。仅在本机识别相册文字区域，不保存或上传截图；更新后可能需要重新开启辅助功能权限。
-          - For inaccessible album labels, the menu-bar album-recognition action enables optional Screen Recording access. Only album text regions are recognized locally; screenshots are never saved or uploaded. Updates may require re-enabling Accessibility access.
 
           **签名说明 / Signing:** This build is ad-hoc signed, without an Apple Developer ID certificate or Apple notarization. macOS may block the first launch; follow the README's standard macOS instructions. The `.sha256` file verifies download integrity.
           NOTES

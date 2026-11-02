@@ -7,8 +7,6 @@ struct PhotoSelection: Equatable, Codable {
     let documentPath: String?
     let albumName: String?
     let source: PhotoSource
-    var albumTokenTexts: [String]? = nil
-    var albumCapturePermissionNeeded: Bool = false
 }
 
 enum PhotoSource: String, Codable { case cloud, local, unknown }
@@ -46,7 +44,6 @@ struct LightroomSnapshot {
 final class LightroomSelectionReader {
     static let bundleID = "com.adobe.lightroomCC"
     private var readFailed = false
-    private let albumTokenReader = AlbumTokenReader()
 
     private func readAttribute(_ element: AXUIElement, _ name: String) -> (AXError, CFTypeRef?) {
         var value: CFTypeRef?
@@ -155,10 +152,6 @@ final class LightroomSelectionReader {
             var candidates: [String] = []
             var hasMainContent = false
             var albumName: String?
-            var searchIconFrame: CGRect?
-            var searchFieldFrame: CGRect?
-            var albumListFrame: CGRect?
-            var sidebarViewport: CGRect?
             var gridSelected = false
             var compareSelected = false
             var detailSelected: Bool?
@@ -166,18 +159,6 @@ final class LightroomSelectionReader {
                 let element = queue[index]
                 index += 1
                 let identifier = string(element, kAXIdentifierAttribute) ?? ""
-                if identifier == "search_box_icon1", case .visible(let bounds) = windowGeometry(element) {
-                    searchIconFrame = bounds
-                }
-                if identifier == "organize_search_field", case .visible(let bounds) = windowGeometry(element) {
-                    searchFieldFrame = bounds
-                }
-                if identifier == "organize_library_view", case .visible(let bounds) = windowGeometry(element) {
-                    albumListFrame = bounds
-                }
-                if identifier == "left_panel_track_scroll_view", case .visible(let bounds) = windowGeometry(element) {
-                    sidebarViewport = bounds
-                }
                 if identifier == "center_content_view" { hasMainContent = true }
                 if ["OrganizeToolbarFlowButton", "OrganizeToolbarGridButton", "OrganizeToolbarCompareButton", "OrganizeToolbarLoupeButton"].contains(identifier),
                    let value = attribute(element, kAXValueAttribute) as? NSNumber {
@@ -189,7 +170,7 @@ final class LightroomSelectionReader {
                     }
                 }
                 if string(element, kAXRoleAttribute) == kAXButtonRole {
-                    let label = [kAXTitleAttribute, kAXDescriptionAttribute].compactMap { string(element, $0) }.first { !$0.isEmpty } ?? ""
+                    let label = string(element, kAXTitleAttribute) ?? string(element, kAXDescriptionAttribute) ?? ""
                     for prefix in ["搜索 ", "Search "] where label.hasPrefix(prefix) {
                         albumName = String(label.dropFirst(prefix.count))
                     }
@@ -216,30 +197,7 @@ final class LightroomSelectionReader {
             if classification == .singlePhoto, let filename = unique.first {
                 let document = string(window, kAXDocumentAttribute)
                 let path = document.flatMap { URL(string: $0) }.flatMap { $0.isFileURL ? $0.path : nil }
-                var selection = PhotoSelection(filename: filename, documentPath: path, albumName: albumName, source: source)
-                // Active search pills define scope even if a previous sidebar row stays highlighted.
-                if albumName == nil, searchIconFrame == nil, source == .cloud, let list = albumListFrame, let viewport = sidebarViewport {
-                    // The list is custom-drawn too. Only its highlighted row proves selection;
-                    // capture the text column, excluding album thumbnails and the photo area.
-                    let column = CGRect(x: list.minX + 64, y: list.minY, width: max(0, list.width - 64), height: list.height)
-                    let visible = column.intersection(viewport).intersection(frame)
-                    if !visible.isNull, !visible.isEmpty {
-                        selection.albumCapturePermissionNeeded = !AlbumScreenCapturePermission.isGranted
-                        selection.albumTokenTexts = []
-                        if let name = albumTokenReader.readSelectedAlbum(rect: visible, processID: app.processIdentifier, windowFrame: frame) {
-                            selection.albumTokenTexts = [name]
-                        }
-                    }
-                }
-                // Search pills are drawn by Lightroom and absent from AXChildren. Read only the
-                // space between its search icon and editable text; never the photo or sidebar.
-                if albumName == nil, selection.albumTokenTexts?.isEmpty != false, source == .cloud, let icon = searchIconFrame, let field = searchFieldFrame,
-                   abs(icon.midY - field.midY) < 20, field.minX - icon.maxX > 30 {
-                    let tokenRect = CGRect(x: icon.maxX, y: field.minY, width: field.minX - icon.maxX, height: field.height)
-                    selection.albumCapturePermissionNeeded = !AlbumScreenCapturePermission.isGranted
-                    selection.albumTokenTexts = albumTokenReader.read(rect: tokenRect, processID: app.processIdentifier, windowFrame: frame) ?? []
-                }
-                return LightroomSnapshot(state: .selected(selection), windowFrame: frame)
+                return LightroomSnapshot(state: .selected(PhotoSelection(filename: filename, documentPath: path, albumName: albumName, source: source)), windowFrame: frame)
             }
         }
         if minimizedCount == windows.count { return LightroomSnapshot(state: .noPhoto, windowFrame: nil) }

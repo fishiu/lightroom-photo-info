@@ -49,12 +49,6 @@ Lightroom Photo Info v$version ($architecture)
 将 Lightroom Photo Info.app 移入“应用程序”，打开后按提示授予辅助功能权限。
 Move the app to Applications, then grant Accessibility permission when prompted.
 
-相册名称无法读取时，可从菜单栏“相册识别权限…”开启屏幕录制权限。
-仅在本机识别相册文字区域，不保存或上传截图。更新后可能需要重新开启辅助功能权限。
-For inaccessible album labels, the menu-bar album-recognition action enables optional
-Screen Recording access. Only album text regions are recognized locally; screenshots
-are never saved or uploaded. Updates may require re-enabling Accessibility access.
-
 此安装包为 ad-hoc 签名，尚未经过 Apple 公证。首次打开说明：
 This build is ad-hoc signed and is not notarized. Installation instructions:
 https://github.com/fishiu/lightroom-photo-info#安装
