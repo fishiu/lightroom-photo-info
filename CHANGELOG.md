@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2 — 2026-11-02
+
+- Read live album scope through Lightroom's built-in Accessibility mode, including normal album browsing and flag-filtered views.
+- Resolve typed album identifiers directly, so matching does not depend on album labels being visually displayed or globally unique.
+- Keep capture/OCR out of the application; no Screen Recording permission or manual search query is required.
+
 ## 0.4.0 — 2026-10-28
 
 First public release.

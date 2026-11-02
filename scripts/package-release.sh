@@ -49,6 +49,11 @@ Lightroom Photo Info v$version ($architecture)
 将 Lightroom Photo Info.app 移入“应用程序”，打开后按提示授予辅助功能权限。
 Move the app to Applications, then grant Accessibility permission when prompted.
 
+在 Lightroom 的“偏好设置 → 界面”中开启“辅助功能模式”，然后照常选择相册和照片。
+Enable Accessibility mode in Lightroom Preferences → Interface, then browse albums normally.
+不需要屏幕录制权限，也无需输入相册搜索条件。
+No Screen Recording permission or manual album search is required.
+
 此安装包为 ad-hoc 签名，尚未经过 Apple 公证。首次打开说明：
 This build is ad-hoc signed and is not notarized. Installation instructions:
 https://github.com/fishiu/lightroom-photo-info#安装

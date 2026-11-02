@@ -52,17 +52,17 @@ struct Benchmark {
             output["album"] = selected.albumName ?? ""
             var successful = 0
             metrics.append(measure("metadata_new_store", count: 10) {
-                if case .found = MetadataStore().lookup(filename: selected.filename, albumName: selected.albumName) { successful += 1 }
+                if case .found = MetadataStore().lookup(filename: selected.filename, albumName: selected.albumName, albumDocID: selected.albumDocID) { successful += 1 }
             })
             let store = MetadataStore()
-            _ = store.lookup(filename: selected.filename, albumName: selected.albumName)
+            _ = store.lookup(filename: selected.filename, albumName: selected.albumName, albumDocID: selected.albumDocID)
             metrics.append(measure("metadata_repeat", count: 100) {
-                if case .found = store.lookup(filename: selected.filename, albumName: selected.albumName) { successful += 1 }
+                if case .found = store.lookup(filename: selected.filename, albumName: selected.albumName, albumDocID: selected.albumDocID) { successful += 1 }
             })
             if validReads == 40 {
                 metrics.append(measure("old_poll_work", count: 30) {
                     _ = reader.readSnapshot()
-                    _ = store.lookup(filename: selected.filename, albumName: selected.albumName)
+                    _ = store.lookup(filename: selected.filename, albumName: selected.albumName, albumDocID: selected.albumDocID)
                     _ = reader.readSnapshot()
                 })
 #if OPTIMIZED
@@ -75,7 +75,7 @@ struct Benchmark {
                     tick += 1
                     guard case .selected(let current) = state else { return }
                     if schedule.needsLookup(for: current, at: now) {
-                        _ = store.lookup(filename: current.filename, albumName: current.albumName)
+                        _ = store.lookup(filename: current.filename, albumName: current.albumName, albumDocID: current.albumDocID)
                         if case .selected(let verified) = reader.readSnapshot().state, current == verified {
                             schedule.complete(current, at: now)
                         }

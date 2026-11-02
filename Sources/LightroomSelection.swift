@@ -7,6 +7,86 @@ struct PhotoSelection: Equatable, Codable {
     let documentPath: String?
     let albumName: String?
     let source: PhotoSource
+    var albumDocID: Int64? = nil
+}
+
+enum AlbumScopeRead: Equatable {
+    case unknown
+    case scope(name: String?, docID: Int64?)
+    case conflicting
+}
+
+/// Reads semantic accessibility labels, never free-form search input or sidebar guesses.
+/// Lightroom's own Accessibility mode exposes CollectionSource:<localDocId> search tokens.
+struct AlbumScopeEvidence {
+    private var fieldNames = Set<String>()
+    private var buttonNames = Set<String>()
+    private var tokenNames = Set<String>()
+    private var tokenIDs = Set<Int64>()
+    private var observedTokenKeys = Set<String>()
+    private var titledTokenKeys = Set<String>()
+    private var invalidToken = false
+
+    mutating func observe(role: String, identifier: String, title: String?,
+                          description: String? = nil, placeholder: String? = nil) {
+        if identifier == "organize_search_field", role == kAXTextFieldRole {
+            for label in [title, placeholder].compactMap({ $0 }) {
+                if let name = Self.searchScopeName(label) { fieldNames.insert(name) }
+            }
+            return
+        }
+        guard role == kAXButtonRole else { return }
+        let parts = identifier.split(separator: "/", omittingEmptySubsequences: false)
+        if parts.count == 3, parts[1].hasPrefix("CollectionSource:") {
+            observedTokenKeys.insert(String(parts[1]))
+        }
+        if parts.last == "title", parts.contains(where: { $0.hasPrefix("CollectionSource:") }) {
+            guard parts.count == 3, !parts[0].isEmpty, parts[1].hasPrefix("CollectionSource:") else {
+                invalidToken = true; return
+            }
+            let rawID = parts[1].dropFirst("CollectionSource:".count)
+            guard !rawID.isEmpty, rawID.first != "0", rawID.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                  let id = Int64(rawID), id > 0 else { invalidToken = true; return }
+            tokenIDs.insert(id)
+            titledTokenKeys.insert(String(parts[1]))
+            if let title {
+                for prefix in ["相册: ", "Album: ", "相簿: "] where title.hasPrefix(prefix) {
+                    let name = String(title.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty { tokenNames.insert(name) }
+                }
+            }
+            return
+        }
+        // Legacy Lightroom layouts expose the scope as a search button instead.
+        for label in [title, description].compactMap({ $0 }) {
+            if let name = Self.searchScopeName(label) { buttonNames.insert(name) }
+        }
+    }
+
+    func resolve() -> AlbumScopeRead {
+        guard !invalidToken, observedTokenKeys == titledTokenKeys,
+              tokenIDs.count <= 1, tokenNames.count <= 1, fieldNames.count <= 1 else {
+            return .conflicting
+        }
+        if let id = tokenIDs.first {
+            if let field = fieldNames.first, let token = tokenNames.first, field != token { return .conflicting }
+            return .scope(name: tokenNames.first ?? fieldNames.first, docID: id)
+        }
+        if let name = fieldNames.first { return .scope(name: name, docID: nil) }
+        guard buttonNames.count <= 1 else { return .conflicting }
+        if let name = buttonNames.first { return .scope(name: name, docID: nil) }
+        return .unknown
+    }
+
+    private static func searchScopeName(_ label: String) -> String? {
+        let value = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !["搜索照片", "搜尋相片", "Search Photos", "Search your photos", "Search My Photos"].contains(value) else { return nil }
+        for prefix in ["搜索 ", "Search ", "搜尋 "] where value.hasPrefix(prefix) {
+            let name = String(value.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : name
+        }
+        return nil
+    }
 }
 
 enum PhotoSource: String, Codable { case cloud, local, unknown }
@@ -147,18 +227,24 @@ final class LightroomSelectionReader {
             case .minimized: minimizedCount += 1; continue
             case .temporarilyUnavailable: continue
             }
-            var queue = [window]
+            var queue: [(element: AXUIElement, inToolbar: Bool)] = [(window, false)]
             var index = 0
             var candidates: [String] = []
             var hasMainContent = false
-            var albumName: String?
+            var albumEvidence = AlbumScopeEvidence()
             var gridSelected = false
             var compareSelected = false
             var detailSelected: Bool?
             while index < queue.count && index < 1500 {
-                let element = queue[index]
+                let entry = queue[index]
+                let element = entry.element
                 index += 1
                 let identifier = string(element, kAXIdentifierAttribute) ?? ""
+                let role = string(element, kAXRoleAttribute) ?? ""
+                let inToolbar = entry.inToolbar || role == kAXToolbarRole
+                // Accessibility mode exposes every album and filmstrip badge. Neither is
+                // needed to read the current loupe and toolbar, so avoid their large trees.
+                if ["library", "filmstrip_scroll_view", "organize loupe filmstrip", "right_panel_buttons", "filterScrollView"].contains(identifier) { continue }
                 if identifier == "center_content_view" { hasMainContent = true }
                 if ["OrganizeToolbarFlowButton", "OrganizeToolbarGridButton", "OrganizeToolbarCompareButton", "OrganizeToolbarLoupeButton"].contains(identifier),
                    let value = attribute(element, kAXValueAttribute) as? NSNumber {
@@ -169,11 +255,10 @@ final class LightroomSelectionReader {
                     default: break
                     }
                 }
-                if string(element, kAXRoleAttribute) == kAXButtonRole {
-                    let label = string(element, kAXTitleAttribute) ?? string(element, kAXDescriptionAttribute) ?? ""
-                    for prefix in ["搜索 ", "Search "] where label.hasPrefix(prefix) {
-                        albumName = String(label.dropFirst(prefix.count))
-                    }
+                if inToolbar && (role == kAXButtonRole || identifier == "organize_search_field") {
+                    albumEvidence.observe(role: role, identifier: identifier,
+                        title: string(element, kAXTitleAttribute), description: string(element, kAXDescriptionAttribute),
+                        placeholder: identifier == "organize_search_field" ? string(element, "AXPlaceholderValue") : nil)
                 }
                 if identifier == "loupeView" {
                     for attr in [kAXDescriptionAttribute, kAXTitleAttribute, kAXValueAttribute] {
@@ -184,7 +269,7 @@ final class LightroomSelectionReader {
                     }
                 }
                 if let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] {
-                    queue.append(contentsOf: children)
+                    queue.append(contentsOf: children.map { ($0, inToolbar) })
                 }
             }
             let unique = Set(candidates)
@@ -195,9 +280,16 @@ final class LightroomSelectionReader {
                 candidateCount: unique.count, sourceKnown: source != .unknown)
             if classification == .noPhoto { return LightroomSnapshot(state: .noPhoto, windowFrame: frame) }
             if classification == .singlePhoto, let filename = unique.first {
+                let albumName: String?
+                let albumDocID: Int64?
+                switch albumEvidence.resolve() {
+                case .unknown: albumName = nil; albumDocID = nil
+                case .scope(let name, let id): albumName = name; albumDocID = id
+                case .conflicting: return LightroomSnapshot(state: .temporarilyUnavailable, windowFrame: frame)
+                }
                 let document = string(window, kAXDocumentAttribute)
                 let path = document.flatMap { URL(string: $0) }.flatMap { $0.isFileURL ? $0.path : nil }
-                return LightroomSnapshot(state: .selected(PhotoSelection(filename: filename, documentPath: path, albumName: albumName, source: source)), windowFrame: frame)
+                return LightroomSnapshot(state: .selected(PhotoSelection(filename: filename, documentPath: path, albumName: albumName, source: source, albumDocID: albumDocID)), windowFrame: frame)
             }
         }
         if minimizedCount == windows.count { return LightroomSnapshot(state: .noPhoto, windowFrame: nil) }

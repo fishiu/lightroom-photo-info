@@ -46,6 +46,8 @@ jobs:
           - Download the `.zip`, extract it, and move the app to Applications. Apple Silicon only; built with a macOS 13 deployment target.
           - 首次使用需要在系统设置中授予“辅助功能”权限。完整步骤及兼容性说明见项目 README。
           - Accessibility permission is required. See the project README for installation and compatibility details.
+          - 请同时开启 Lightroom 自己的“偏好设置 → 界面 → 辅助功能模式”。照常选择相册即可，不需要录屏权限或手动搜索相册。
+          - Also enable Accessibility mode in Lightroom Preferences → Interface. Browse albums normally; Screen Recording permission and manual album searches are not required.
 
           **签名说明 / Signing:** This build is ad-hoc signed, without an Apple Developer ID certificate or Apple notarization. macOS may block the first launch; follow the README's standard macOS instructions. The `.sha256` file verifies download integrity.
           NOTES

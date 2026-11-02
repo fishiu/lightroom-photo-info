@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             var result: MetadataLookup?
             if case .selected(let selection) = first.state, first.windowFrame != nil {
                 switch selection.source {
-                case .cloud: result = self.store.lookup(filename: selection.filename, albumName: selection.albumName)
+                case .cloud: result = self.store.lookup(filename: selection.filename, albumName: selection.albumName, albumDocID: selection.albumDocID)
                 case .local: result = .unavailable("本地视图暂未支持，请切回云端照片")
                 case .unknown: result = .unavailable("暂时无法确认照片来源")
                 }

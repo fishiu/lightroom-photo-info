@@ -51,7 +51,8 @@ This is an early release. It depends on Lightroom's private cache format, so Ado
 1. Download `Lightroom-Photo-Info-v…-macos-arm64.zip` from [Releases](https://github.com/fishiu/lightroom-photo-info/releases/latest).
 2. Extract it and move **Lightroom Photo Info.app** to Applications.
 3. Open it and allow **Accessibility** access in System Settings → Privacy & Security.
-4. Return to Lightroom and open one photo in Detail/Edit view using the Cloud tab.
+4. Enable **Accessibility mode** in **Lightroom → Settings/Preferences → Interface**. This one-time Lightroom setting is separate from macOS Accessibility permission and exposes album/search scope directly.
+5. Return to Lightroom and open a photo in Detail/Edit view using the Cloud tab. Select albums normally; no search query or Screen Recording permission is needed.
 
 **First-launch warning:** releases are ad-hoc signed, without an Apple Developer ID certificate or Apple notarization. After verifying that the download came from this repository, follow [Apple's documented Open Anyway flow](https://support.apple.com/102445) for this app. Disabling Gatekeeper is not required.
 

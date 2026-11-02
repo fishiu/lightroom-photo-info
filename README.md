@@ -54,7 +54,8 @@ Lightroom 云端版里，查看拍摄信息常常需要暂时离开编辑面板�
 1. 到 **[Releases](https://github.com/fishiu/lightroom-photo-info/releases/latest)** 下载 `Lightroom-Photo-Info-v…-macos-arm64.zip`。
 2. 解压，将 **Lightroom Photo Info.app** 移到“应用程序”。
 3. 打开应用，按提示在 **系统设置 → 隐私与安全性 → 辅助功能** 中允许 Lightroom Photo Info。
-4. 回到 Lightroom 云端版，打开一张照片的细节 / 编辑视图。
+4. 在 **Lightroom → 设置/偏好设置 → 界面** 中开启 **“辅助功能模式”**。这是 Lightroom 自己的一次性设置，与 macOS 的辅助功能权限不同，用来让软件直接提供相册和筛选范围。
+5. 回到 Lightroom 云端版，照常点击相册、打开照片的细节 / 编辑视图。无需输入搜索条件，也不需要屏幕录制权限。
 
 **首次打开提示无法验证开发者？** 当前安装包采用本地 ad-hoc 签名，尚无 Apple Developer ID 签名或公证。确认下载来自本仓库后，可按 [Apple 官方说明](https://support.apple.com/102445)，在首次尝试打开后进入“隐私与安全性”，为此应用选择“仍要打开”。不需要关闭 Gatekeeper。
 

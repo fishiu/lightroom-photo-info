@@ -80,7 +80,7 @@ final class MetadataStore {
             cachedMetadataCount: metadataCache.count, cachedMetadataBytes: metadataBytes)
     }
 
-    func lookup(filename: String, albumName: String? = nil) -> MetadataLookup {
+    func lookup(filename: String, albumName: String? = nil, albumDocID: Int64? = nil) -> MetadataLookup {
         lock.lock()
         defer { lock.unlock() }
         do {
@@ -92,7 +92,7 @@ final class MetadataStore {
                 resolutionCache.removeAll(keepingCapacity: true)
                 indexVersions = currentIndexVersions
             }
-            let matches = try resolve(filename: filename, albumName: albumName)
+            let matches = try resolve(filename: filename, albumName: albumName, albumDocID: albumDocID)
             guard !matches.isEmpty else { return .unavailable("无法确认当前照片的图库记录") }
             let results = try matches.map { try metadata(catalog: $0.0, candidate: $0.1) }
             // Either database may change during the lookup. Never publish a mixed-generation result.
@@ -128,9 +128,9 @@ final class MetadataStore {
         }
     }
 
-    private func resolve(filename: String, albumName: String?) throws -> [(Catalog, Candidate)] {
+    private func resolve(filename: String, albumName: String?, albumDocID: Int64?) throws -> [(Catalog, Candidate)] {
         accessCounter &+= 1
-        let key = ResolutionKey(filename: filename, album: albumName ?? "")
+        let key = ResolutionKey(filename: filename, album: albumName ?? "", albumDocID: albumDocID)
         if var cached = resolutionCache[key] {
             resolutionHits += 1
             cached.access = accessCounter
@@ -141,12 +141,18 @@ final class MetadataStore {
         for catalog in catalogs {
             matches += try catalog.candidates(filename: filename).map { (catalog, $0) }
         }
-        if let albumName, !albumName.isEmpty {
+        if albumDocID != nil || !(albumName ?? "").isEmpty {
             var albums: [(Catalog, String)] = []
             for catalog in catalogs {
-                albums += try catalog.albumIDs(named: albumName).map { (catalog, $0) }
+                let ids: [String]
+                if let albumDocID { ids = try catalog.albumIDs(docID: albumDocID) }
+                else { ids = try catalog.albumIDs(named: albumName!) }
+                albums += ids.map { (catalog, $0) }
             }
             guard albums.count <= 1 else { throw CatalogError.ambiguousAlbum }
+            // A typed album identifier is authoritative: a missing/hidden ID must never
+            // fall back to a globally unique filename or a different album with that name.
+            if albumDocID != nil, albums.isEmpty { return [] }
             if let (albumCatalog, albumID) = albums.first {
                 var scoped: [(Catalog, Candidate)] = []
                 for (catalog, candidate) in matches where catalog === albumCatalog {
@@ -302,7 +308,7 @@ final class MetadataStore {
 
 private enum CatalogError: Error { case open, query, missingDocument, unsupportedSchema, noCaptureMetadata, ambiguousAlbum }
 private struct Candidate { let docID: Int64; let filename: String; let assetID: String }
-private struct ResolutionKey: Hashable { let filename: String; let album: String }
+private struct ResolutionKey: Hashable { let filename: String; let album: String; let albumDocID: Int64? }
 private struct ResolutionEntry { let matches: [(Catalog, Candidate)]; var access: UInt64 }
 private struct MetadataKey: Hashable { let catalog: ObjectIdentifier; let docID: Int64; let assetID: String; let filename: String }
 private struct MetadataEntry { let revision: Int64; let dataVersion: Int64; let photo: PhotoMetadata; let cost: Int; var access: UInt64 }
@@ -396,6 +402,20 @@ private final class Catalog {
         while status == SQLITE_ROW {
             result.append(ReadOnlyDatabase.text(albums, 0))
             status = sqlite3_step(albums)
+        }
+        guard status == SQLITE_DONE else { throw CatalogError.query }
+        return result
+    }
+    func albumIDs(docID: Int64) throws -> [String] {
+        guard docID > 0 else { return [] }
+        let statement = try index.statement("SELECT albumId FROM albums WHERE docId=? AND hidden=0")
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int64(statement, 1, docID)
+        var result: [String] = []
+        var status = sqlite3_step(statement)
+        while status == SQLITE_ROW {
+            result.append(ReadOnlyDatabase.text(statement, 0))
+            status = sqlite3_step(statement)
         }
         guard status == SQLITE_DONE else { throw CatalogError.query }
         return result

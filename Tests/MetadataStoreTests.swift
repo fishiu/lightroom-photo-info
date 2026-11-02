@@ -54,12 +54,14 @@ private func createFixtures(at library: URL) throws {
         CREATE TABLE schemaVersion(currentVersion);
         INSERT INTO schemaVersion VALUES(1.0);
         CREATE TABLE assets(docId,filename,assetId,subtype);
-        CREATE TABLE albums(albumId,name,hidden);
+        CREATE TABLE albums(docId INTEGER PRIMARY KEY,albumId,name,hidden);
         CREATE TABLE album_asset_v2(assetId,albumId);
-        INSERT INTO albums VALUES('album-a','Album A',0),('album-b','Album B',0),
-                                 ('duplicate-a','Same Name',0),('duplicate-b','Same Name',0);
+        INSERT INTO albums VALUES(11,'album-a','Album A',0),(12,'album-b','Album B',0),
+                                 (13,'duplicate-a','Same Name',0),(14,'duplicate-b','Same Name',0),
+                                 (15,'hidden-album','Hidden Album',1);
         INSERT INTO album_asset_v2 VALUES('test-1','album-a'),('test-2','album-a'),
-                                        ('test-3','album-a'),('test-4','album-a'),('test-5','album-b');
+                                        ('test-3','album-a'),('test-4','album-a'),('test-5','album-b'),
+                                        ('test-4','duplicate-a'),('test-5','duplicate-b'),('test-1','hidden-album');
         """)
     try execute(documents, """
         CREATE TABLE schemaVersion(currentVersion);
@@ -196,6 +198,17 @@ struct MetadataStoreTests {
             throw TestFailure(description: "Unique album should resolve global filename conflict")
         }
         try expect(scoped.iso == "200" && scoped.assetID == "test-5", "Album resolution selected the wrong asset")
+        for (albumID, expectedAsset) in [(Int64(11), "test-4"), (12, "test-5"), (13, "test-4"), (14, "test-5")] {
+            guard case let .found(photo) = store.lookup(filename: "conflict.RAF", albumName: "Same Name", albumDocID: albumID) else {
+                throw TestFailure(description: "Typed album identity must resolve duplicate photo/album names")
+            }
+            try expect(photo.assetID == expectedAsset, "Album ID or its cache leaked another album's result")
+        }
+        for id in [Int64(0), -1, 999, 15, 12] {
+            if case .found = store.lookup(filename: "unique.RAF", albumName: "Album A", albumDocID: id) {
+                throw TestFailure(description: "Unknown/hidden/out-of-scope album ID fell back to a global filename or name")
+            }
+        }
         guard case .found = store.lookup(filename: "same.RAF", albumName: "所有照片") else {
             throw TestFailure(description: "Non-album scope should retain global consensus")
         }
